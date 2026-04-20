@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SkySafe | Login</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+    <link rel="stylesheet" href="../css/auth.css" />
+</head>
+
+<body>
+
+    <!-- Animated background canvas -->
+    <canvas id="bgCanvas"></canvas>
+
+    <!-- Floating weather icons (decorative) -->
+    <div class="floating-icons" aria-hidden="true">
+        <span class="fi fi-1">🌤</span>
+        <span class="fi fi-2">⛈</span>
+        <span class="fi fi-3">🌪</span>
+        <span class="fi fi-4">❄️</span>
+        <span class="fi fi-5">🌧</span>
+        <span class="fi fi-6">⚡</span>
+    </div>
+
+    <!-- Main wrapper -->
+    <div class="register-wrapper">
+        <div class="register-card">
+
+            <!-- ── LEFT PANEL ── -->
+            <div class="left-panel">
+
+                <div class="brand">
+                    <div class="brand-icon"><i class="fas fa-shield-halved"></i></div>
+                    <div class="brand-text">SKY<span>SAFE</span></div>
+                </div>
+
+                <!-- Globe visual -->
+                <div class="globe-wrap">
+                    <div class="globe-glow"></div>
+                    <div class="globe-ring rg1"></div>
+                    <div class="globe-ring rg2"></div>
+                    <div class="globe">
+                        <div class="globe-grid"></div>
+                        <div class="radar-sweep-globe"></div>
+                        <div class="globe-dot gd1"></div>
+                        <div class="globe-dot gd2"></div>
+                        <div class="globe-dot gd3"></div>
+                    </div>
+                </div>
+
+                <div class="left-tagline">
+                    <h2>Welcome Back</h2>
+                    <p>Log in to your account and start monitoring the world's weather in real time.</p>
+                </div>
+
+                <!-- Benefits list -->
+                <ul class="benefits-list">
+                    <li><i class="fas fa-check-circle"></i> Live wind &amp; radar maps</li>
+                    <li><i class="fas fa-check-circle"></i> 7-day precision forecasts</li>
+                    <li><i class="fas fa-check-circle"></i> Severe weather alerts</li>
+                    <li><i class="fas fa-check-circle"></i> Click-to-inspect any location</li>
+                </ul>
+
+            </div>
+
+            <!-- ── RIGHT PANEL ── -->
+            <div class="right-panel">
+
+                <div class="form-header">
+                    <h1 class="form-title">Login to Account</h1>
+                    <p class="form-sub">Enter your credentials to continue</p>
+                </div>
+
+                <form id="form" novalidate>
+
+                    <!-- Email -->
+                    <div class="field-wrap">
+                        <label for="Email" class="field-label">
+                            <i class="fas fa-envelope"></i> Email Address
+                        </label>
+                        <div class="input-wrap">
+                            <input id="Email" type="email" class="field-input" placeholder="you@example.com"
+                                autocomplete="email" />
+                        </div>
+                    </div>
+
+                    <!-- Password -->
+                    <div class="field-wrap">
+                        <label for="password" class="field-label">
+                            <i class="fas fa-lock"></i> Password
+                        </label>
+                        <div class="input-wrap">
+                            <input id="password" type="password" class="field-input" placeholder="Enter your password"
+                                autocomplete="current-password" />
+                            <button type="button" class="eye-btn" id="toggleP1" tabindex="-1">
+                                <i class="fas fa-eye" id="eyeIcon1"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Message -->
+                    <div id="msg" class="msg-box"></div>
+
+                    <!-- Submit button -->
+                    <button type="submit" id="n" class="btn-register">
+                        <span class="btn-text">Login</span>
+                        <i class="fas fa-arrow-right btn-arrow"></i>
+                        <span class="btn-glow"></span>
+                    </button>
+
+                </form>
+
+                <!-- Footer -->
+                <div class="form-footer">
+                    <span>Don't have an account?</span>
+                    <a href="register.html" class="signin-link">Register</a>
+                </div>
+                <div style="margin-top:12px;padding:10px 14px;background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.2);border-radius:10px;font-size:12px;color:#a78bfa;text-align:center">
+                    <i class="fas fa-shield-halved" style="margin-right:6px"></i>
+                    <strong>Admin?</strong> Login with <code style="background:rgba(255,255,255,0.08);padding:1px 6px;border-radius:4px">admin@skysafe.com</code>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Your original script last so DOM is ready -->
+    <script src="../js/auth.js"></script>
+</body>
+
+</html>

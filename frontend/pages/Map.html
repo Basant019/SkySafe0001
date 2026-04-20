@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SkySafe — Live Weather Map</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Exo+2:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <style>
+    :root {
+      --sky-blue: #00c8ff;
+      --sky-dark: #0a0e1a;
+      --sky-panel: rgba(10,14,26,0.92);
+      --sky-border: rgba(0,200,255,0.2);
+      --sky-accent: #ff6b35;
+      --sky-green: #00ff88;
+    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    html, body { height:100%; overflow:hidden; background:#0a0e1a; }
+    body { font-family:'Exo 2',sans-serif; color:#e0e8ff; }
+
+    /* MAP */
+    #map {
+      position: fixed; inset:0; z-index:1;
+      filter: brightness(0.85) saturate(1.1);
+    }
+
+    /* TOP NAV */
+    .top-nav {
+      position: fixed; top:0; left:0; right:0; z-index:1000;
+      height: 52px;
+      background: var(--sky-panel);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--sky-border);
+      display: flex; align-items: center; padding: 0 16px; gap:16px;
+    }
+    .logo-sm {
+      font-family:'Orbitron',monospace; font-size:1rem; font-weight:900;
+      color:var(--sky-blue); text-decoration:none; letter-spacing:2px;
+      white-space:nowrap;
+    }
+    .logo-sm span { color:#ff6b35; }
+    .nav-divider { width:1px; height:28px; background:var(--sky-border); }
+
+    /* Search bar */
+    .search-wrap {
+      flex:1; max-width:340px; position:relative;
+    }
+    .search-wrap input {
+      width:100%; padding:8px 16px 8px 36px;
+      background:rgba(255,255,255,0.07);
+      border:1px solid var(--sky-border);
+      border-radius:4px; color:#e0e8ff;
+      font-family:'Exo 2',sans-serif; font-size:0.85rem;
+      outline:none; transition:border 0.3s;
+    }
+    .search-wrap input:focus { border-color:var(--sky-blue); }
+    .search-wrap input::placeholder { color:#445566; }
+    .search-icon {
+      position:absolute; left:12px; top:50%; transform:translateY(-50%);
+      color:#556677; font-size:0.8rem;
+    }
+    .search-results {
+      position:absolute; top:100%; left:0; right:0;
+      background:rgba(10,14,26,0.97); border:1px solid var(--sky-border);
+      border-top:none; border-radius:0 0 4px 4px;
+      display:none; z-index:999; max-height:200px; overflow-y:auto;
+    }
+    .search-result-item {
+      padding:10px 16px; cursor:pointer; font-size:0.85rem;
+      color:#aabbcc; border-bottom:1px solid rgba(0,200,255,0.08);
+      transition:background 0.2s;
+    }
+    .search-result-item:hover { background:rgba(0,200,255,0.1); color:#fff; }
+
+    /* Top controls */
+    .top-controls { display:flex; gap:8px; margin-left:auto; align-items:center; }
+    .ctrl-btn {
+      background:rgba(255,255,255,0.07); border:1px solid var(--sky-border);
+      color:#8899bb; border-radius:4px; padding:6px 12px;
+      font-size:0.75rem; cursor:pointer; transition:all 0.3s;
+      font-family:'Exo 2',sans-serif; display:flex; align-items:center; gap:6px;
+      text-decoration:none;
+    }
+    .ctrl-btn:hover, .ctrl-btn.active { background:rgba(0,200,255,0.15); border-color:var(--sky-blue); color:var(--sky-blue); }
+    .ctrl-btn.danger:hover { background:rgba(255,107,53,0.15); border-color:var(--sky-accent); color:var(--sky-accent); }
+
+    /* RIGHT LAYER PANEL (like Windy) */
+    .layer-panel {
+      position:fixed; right:0; top:52px; bottom:0; z-index:900;
+      width:72px;
+      background:var(--sky-panel);
+      backdrop-filter:blur(20px);
+      border-left:1px solid var(--sky-border);
+      display:flex; flex-direction:column; align-items:center;
+      padding:12px 0; gap:4px; overflow-y:auto;
+    }
+    .layer-btn {
+      width:56px; border-radius:8px;
+      background:transparent; border:1px solid transparent;
+      cursor:pointer; padding:8px 4px; text-align:center;
+      transition:all 0.3s; display:flex; flex-direction:column;
+      align-items:center; gap:4px; position:relative;
+    }
+    .layer-btn:hover { background:rgba(0,200,255,0.1); border-color:var(--sky-border); }
+    .layer-btn.active { background:rgba(0,200,255,0.15); border-color:var(--sky-blue); }
+    .layer-thumb {
+      width:44px; height:44px; border-radius:6px; overflow:hidden;
+      display:flex; align-items:center; justify-content:center; font-size:1.2rem;
+    }
+    .layer-label {
+      font-size:0.6rem; color:#6677aa; font-family:'Exo 2',sans-serif;
+      line-height:1.2; text-align:center; font-weight:500;
+    }
+    .layer-btn.active .layer-label { color:var(--sky-blue); }
+    .layer-sep { width:40px; height:1px; background:var(--sky-border); margin:4px 0; }
+
+    /* Layer thumb gradients */
+    .thumb-wind { background:linear-gradient(135deg,#1a4a8a,#2d6dd4,#00c8ff); }
+    .thumb-rain { background:linear-gradient(135deg,#1a3a6a,#4455aa,#7788ff); }
+    .thumb-temp { background:linear-gradient(135deg,#2a1a8a,#8833cc,#ff44aa); }
+    .thumb-cloud { background:linear-gradient(135deg,#334455,#667788,#aabbcc); }
+    .thumb-wave { background:linear-gradient(135deg,#0a2a5a,#1155aa,#3388ff); }
+    .thumb-radar { background:linear-gradient(135deg,#1a3a1a,#336633,#44ff44); }
+    .thumb-sat { background:linear-gradient(135deg,#2a2a1a,#665533,#ffcc44); }
+    .thumb-thunder { background:linear-gradient(135deg,#3a2a0a,#885522,#ffaa00); }
+    .thumb-pressure { background:linear-gradient(135deg,#2a0a2a,#662266,#ff44ff); }
+    .thumb-hurricane { background:linear-gradient(135deg,#3a0a0a,#882222,#ff4444); }
+
+    /* BOTTOM TIMELINE (like Windy) */
+    .timeline-bar {
+      position:fixed; bottom:0; left:0; right:72px; z-index:900;
+      background:var(--sky-panel);
+      backdrop-filter:blur(20px);
+      border-top:1px solid var(--sky-border);
+      padding:0;
+    }
+    .timeline-top {
+      display:flex; align-items:center; gap:0;
+      padding:8px 12px 4px; gap:12px;
+    }
+    .play-btn {
+      width:32px; height:32px; border-radius:50%;
+      background:rgba(0,200,255,0.2); border:1px solid var(--sky-blue);
+      color:var(--sky-blue); cursor:pointer; display:flex;
+      align-items:center; justify-content:center; font-size:0.8rem;
+      transition:all 0.3s; flex-shrink:0;
+    }
+    .play-btn:hover { background:rgba(0,200,255,0.3); }
+    .time-display {
+      background:rgba(255,170,0,0.2); border:1px solid rgba(255,170,0,0.4);
+      color:#ffaa00; padding:5px 12px; border-radius:4px;
+      font-family:'Orbitron',monospace; font-size:0.75rem; font-weight:700;
+      white-space:nowrap; cursor:pointer;
+    }
+    .timeline-slider-wrap { flex:1; position:relative; }
+    .timeline-slider {
+      width:100%; -webkit-appearance:none; appearance:none;
+      height:4px; border-radius:2px; outline:none; cursor:pointer;
+      background:linear-gradient(to right,var(--sky-blue) 0%,var(--sky-blue) var(--pct,30%),rgba(0,200,255,0.2) var(--pct,30%));
+    }
+    .timeline-slider::-webkit-slider-thumb {
+      -webkit-appearance:none; appearance:none;
+      width:14px; height:14px; border-radius:50%;
+      background:var(--sky-blue); cursor:pointer;
+      box-shadow:0 0 8px var(--sky-blue);
+    }
+    .timeline-days {
+      display:flex; padding:0 12px 8px; gap:0;
+      overflow-x:auto; scrollbar-width:none;
+    }
+    .timeline-days::-webkit-scrollbar { display:none; }
+    .day-tick {
+      flex:1; min-width:60px; text-align:center;
+      font-size:0.68rem; color:#445566;
+      padding:2px 0; cursor:pointer; border-top:1px solid transparent;
+      transition:all 0.2s; position:relative; font-family:'Exo 2',sans-serif;
+    }
+    .day-tick.active { color:var(--sky-blue); border-top-color:var(--sky-blue); }
+    .day-tick:hover { color:#8899bb; }
+    .day-dot {
+      position:absolute; top:-5px; left:50%;
+      transform:translateX(-50%);
+      width:6px; height:6px; border-radius:50%;
+      background:rgba(255,170,0,0.6); display:none;
+    }
+    .day-tick.has-event .day-dot { display:block; }
+
+    /* BOTTOM RIGHT CONTROLS */
+    .map-controls {
+      position:fixed; bottom:120px; right:80px; z-index:900;
+      display:flex; flex-direction:column; gap:4px;
+    }
+    .map-ctrl-group {
+      background:var(--sky-panel); border:1px solid var(--sky-border);
+      border-radius:6px; overflow:hidden; backdrop-filter:blur(20px);
+    }
+    .map-ctrl-btn {
+      width:36px; height:36px; display:flex; align-items:center; justify-content:center;
+      cursor:pointer; color:#8899bb; font-size:0.9rem;
+      background:transparent; border:none; transition:all 0.3s;
+      border-bottom:1px solid var(--sky-border);
+    }
+    .map-ctrl-btn:last-child { border-bottom:none; }
+    .map-ctrl-btn:hover { background:rgba(0,200,255,0.1); color:var(--sky-blue); }
+    .map-ctrl-btn.active { background:rgba(0,200,255,0.15); color:var(--sky-blue); }
+
+    /* POPUP INFO (like Windy click popup) */
+    .info-popup {
+      position:fixed; z-index:950;
+      background:rgba(10,14,26,0.95);
+      border:1px solid var(--sky-border);
+      backdrop-filter:blur(20px);
+      border-radius:8px; padding:0;
+      min-width:280px; display:none;
+      box-shadow:0 20px 60px rgba(0,0,0,0.6);
+      overflow:hidden;
+    }
+    .popup-header {
+      background:rgba(0,200,255,0.08);
+      border-bottom:1px solid var(--sky-border);
+      padding:10px 14px;
+      display:flex; align-items:center; justify-content:space-between;
+    }
+    .popup-coords {
+      font-family:'Orbitron',monospace; font-size:0.7rem;
+      color:var(--sky-blue); letter-spacing:1px;
+    }
+    .popup-close {
+      background:none; border:none; color:#556677;
+      cursor:pointer; font-size:0.9rem; transition:color 0.2s;
+    }
+    .popup-close:hover { color:#fff; }
+    .popup-body { padding:14px; }
+    .popup-row {
+      display:flex; align-items:center; gap:10px;
+      padding:7px 0; border-bottom:1px solid rgba(0,200,255,0.08);
+    }
+    .popup-row:last-child { border-bottom:none; }
+    .popup-icon { width:20px; color:var(--sky-blue); font-size:0.85rem; text-align:center; }
+    .popup-key { font-size:0.8rem; color:#667788; flex:1; }
+    .popup-val { font-size:0.85rem; color:#ddeeff; font-weight:600; }
+    .popup-actions {
+      border-top:1px solid var(--sky-border);
+      display:flex; gap:0;
+    }
+    .popup-action-btn {
+      flex:1; padding:10px; background:transparent;
+      border:none; border-right:1px solid var(--sky-border);
+      color:#556677; font-size:0.75rem; cursor:pointer;
+      transition:all 0.2s; font-family:'Exo 2',sans-serif;
+      display:flex; flex-direction:column; align-items:center; gap:4px;
+    }
+    .popup-action-btn:last-child { border-right:none; }
+    .popup-action-btn:hover { background:rgba(0,200,255,0.08); color:var(--sky-blue); }
+    .popup-action-btn i { font-size:0.9rem; }
+
+    /* BOTTOM MODEL SWITCHER */
+    .model-switcher {
+      position:fixed; bottom:88px; left:50%; transform:translateX(-50%);
+      z-index:900; display:flex; gap:4px;
+    }
+    .model-btn {
+      background:rgba(10,14,26,0.9); border:1px solid var(--sky-border);
+      color:#6677aa; padding:6px 14px; border-radius:4px;
+      font-size:0.72rem; cursor:pointer; font-family:'Orbitron',monospace;
+      transition:all 0.3s; white-space:nowrap; backdrop-filter:blur(10px);
+    }
+    .model-btn.active {
+      background:rgba(255,170,0,0.2); border-color:rgba(255,170,0,0.5);
+      color:#ffaa00;
+    }
+    .model-btn span { font-size:0.55rem; color:#445566; display:block; }
+
+    /* COLOR SCALE */
+    .color-scale {
+      position:fixed; bottom:88px; left:12px; z-index:900;
+      background:var(--sky-panel); border:1px solid var(--sky-border);
+      border-radius:6px; padding:8px 12px; backdrop-filter:blur(20px);
+    }
+    .scale-bar {
+      width:180px; height:10px; border-radius:3px;
+      background:linear-gradient(to right,#00c8ff,#0055ff,#8800ff,#ff00aa,#ff6b35);
+    }
+    .scale-labels {
+      display:flex; justify-content:space-between;
+      margin-top:4px;
+    }
+    .scale-label { font-size:0.6rem; color:#445566; }
+
+    /* Wind indicator */
+    .wind-indicator {
+      position:fixed; top:60px; left:12px; z-index:900;
+      background:var(--sky-panel); border:1px solid var(--sky-border);
+      border-radius:6px; padding:10px 14px; backdrop-filter:blur(20px);
+      display:none;
+    }
+    .wind-indicator.show { display:block; }
+    .wind-speed {
+      font-family:'Orbitron',monospace; font-size:1.4rem; font-weight:700;
+      color:var(--sky-blue);
+    }
+    .wind-unit { font-size:0.7rem; color:#556677; }
+    .wind-dir { font-size:0.8rem; color:#8899bb; margin-top:2px; }
+
+    /* Coordinates display */
+    .coords-display {
+      position:fixed; bottom:88px; right:80px; z-index:900;
+      background:var(--sky-panel); border:1px solid var(--sky-border);
+      border-radius:4px; padding:4px 10px; backdrop-filter:blur(20px);
+      font-family:'Orbitron',monospace; font-size:0.62rem;
+      color:#445566; display:flex; gap:12px;
+    }
+
+    /* Loading overlay */
+    .loading-overlay {
+      position:fixed; inset:0; z-index:9999;
+      background:var(--sky-dark);
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      transition:opacity 0.5s;
+    }
+    .loading-logo {
+      font-family:'Orbitron',monospace; font-size:2rem; font-weight:900;
+      color:var(--sky-blue); letter-spacing:4px; margin-bottom:30px;
+    }
+    .loading-logo span { color:#ff6b35; }
+    .loading-bar-wrap {
+      width:200px; height:3px; background:rgba(0,200,255,0.1);
+      border-radius:2px; overflow:hidden;
+    }
+    .loading-bar {
+      height:100%; width:0; background:var(--sky-blue);
+      animation:loadAnim 2s ease forwards;
+    }
+    .loading-text {
+      margin-top:16px; font-size:0.75rem; color:#334455;
+      font-family:'Orbitron',monospace; letter-spacing:2px;
+    }
+    @keyframes loadAnim { to { width:100%; } }
+
+    /* Leaflet overrides */
+    .leaflet-control-zoom { display:none !important; }
+    .leaflet-popup-content-wrapper {
+      background:rgba(10,14,26,0.95) !important; border:1px solid var(--sky-border) !important;
+      color:#e0e8ff !important; border-radius:8px !important;
+    }
+    .leaflet-popup-tip { background:rgba(10,14,26,0.95) !important; }
+    .leaflet-control-attribution { display:none; }
+
+    /* Particles canvas */
+    #particles-canvas {
+      position:fixed; inset:0; z-index:5; pointer-events:none;
+    }
+
+    /* Active layer badge */
+    .active-layer-badge {
+      position:fixed; top:60px; left:50%; transform:translateX(-50%);
+      z-index:900; background:rgba(0,200,255,0.15);
+      border:1px solid var(--sky-blue); border-radius:20px;
+      padding:5px 16px; font-family:'Orbitron',monospace;
+      font-size:0.7rem; color:var(--sky-blue); letter-spacing:2px;
+    }
+
+    .live-dot {
+      width:6px; height:6px; border-radius:50%;
+      background:#00ff88; display:inline-block; margin-right:6px;
+      animation:livePulse 1.5s ease-in-out infinite;
+    }
+    @keyframes livePulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.4;transform:scale(0.5)} }
+
+    /* Pressure toggle */
+    .bottom-toggles {
+      position:fixed; bottom:88px; right:120px; z-index:900;
+      display:flex; gap:8px;
+    }
+    .toggle-pill {
+      background:var(--sky-panel); border:1px solid var(--sky-border);
+      border-radius:20px; padding:5px 12px;
+      font-size:0.68rem; color:#445566; cursor:pointer;
+      transition:all 0.3s; backdrop-filter:blur(20px);
+      display:flex; align-items:center; gap:6px;
+    }
+    .toggle-pill.active { border-color:var(--sky-blue); color:var(--sky-blue); }
+    .toggle-pill i { font-size:0.7rem; }
+  </style>
+</head>
+<body>
+
+<!-- Loading overlay -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="loading-logo">SKY<span>SAFE</span></div>
+  <div class="loading-bar-wrap"><div class="loading-bar"></div></div>
+  <div class="loading-text">LOADING WEATHER DATA...</div>
+</div>
+
+<!-- Map -->
+<div id="map"></div>
+
+<!-- Wind particles canvas -->
+<canvas id="particles-canvas"></canvas>
+
+<!-- Top nav -->
+<div class="top-nav">
+  <a href="index.html" class="logo-sm">SKY<span>SAFE</span></a>
+  <div class="nav-divider"></div>
+  <div class="search-wrap">
+    <i class="fas fa-search search-icon"></i>
+    <input type="text" id="searchInput" placeholder="Search city or coordinates..." autocomplete="off"/>
+    <div class="search-results" id="searchResults"></div>
+  </div>
+  <div class="top-controls">
+    <span style="font-size:0.72rem; color:#445566; font-family:'Orbitron',monospace;">
+      <span class="live-dot"></span>LIVE
+    </span>
+    <div class="nav-divider"></div>
+    <a href="Forecast.html" class="ctrl-btn"><i class="fas fa-chart-line"></i> Forecast</a>
+    <a href="Alert.html" class="ctrl-btn danger"><i class="fas fa-triangle-exclamation"></i> Alerts</a>
+    <a href="index.html" class="ctrl-btn"><i class="fas fa-home"></i></a>
+  </div>
+</div>
+
+<!-- Active layer badge -->
+<div class="active-layer-badge" id="layerBadge">WIND</div>
+
+<!-- RIGHT LAYER PANEL -->
+<div class="layer-panel">
+  <button class="layer-btn active" data-layer="wind" onclick="switchLayer('wind',this)">
+    <div class="layer-thumb thumb-wind">💨</div>
+    <div class="layer-label">Wind</div>
+  </button>
+  <button class="layer-btn" data-layer="rain" onclick="switchLayer('rain',this)">
+    <div class="layer-thumb thumb-rain">🌧</div>
+    <div class="layer-label">Rain,<br/>Thunder</div>
+  </button>
+  <button class="layer-btn" data-layer="temp" onclick="switchLayer('temp',this)">
+    <div class="layer-thumb thumb-temp">🌡</div>
+    <div class="layer-label">Temp</div>
+  </button>
+  <div class="layer-sep"></div>
+  <button class="layer-btn" data-layer="cloud" onclick="switchLayer('cloud',this)">
+    <div class="layer-thumb thumb-cloud">☁️</div>
+    <div class="layer-label">Clouds</div>
+  </button>
+  <button class="layer-btn" data-layer="wave" onclick="switchLayer('wave',this)">
+    <div class="layer-thumb thumb-wave">🌊</div>
+    <div class="layer-label">Waves</div>
+  </button>
+  <button class="layer-btn" data-layer="radar" onclick="switchLayer('radar',this)">
+    <div class="layer-thumb thumb-radar">📡</div>
+    <div class="layer-label">Radar</div>
+  </button>
+  <div class="layer-sep"></div>
+  <button class="layer-btn" data-layer="sat" onclick="switchLayer('sat',this)">
+    <div class="layer-thumb thumb-sat">🛰</div>
+    <div class="layer-label">Satellite</div>
+  </button>
+  <button class="layer-btn" data-layer="thunder" onclick="switchLayer('thunder',this)">
+    <div class="layer-thumb thumb-thunder">⚡</div>
+    <div class="layer-label">Thunder</div>
+  </button>
+  <div class="layer-sep"></div>
+  <button class="layer-btn" data-layer="pressure" onclick="switchLayer('pressure',this)">
+    <div class="layer-thumb thumb-pressure">🔵</div>
+    <div class="layer-label">Pressure</div>
+  </button>
+  <button class="layer-btn" data-layer="hurricane" onclick="switchLayer('hurricane',this)">
+    <div class="layer-thumb thumb-hurricane">🌀</div>
+    <div class="layer-label">Hurricane</div>
+  </button>
+</div>
+
+<!-- MAP CONTROLS -->
+<div class="map-controls">
+  <div class="map-ctrl-group">
+    <button class="map-ctrl-btn" onclick="zoomIn()" title="Zoom In"><i class="fas fa-plus"></i></button>
+    <button class="map-ctrl-btn" onclick="zoomOut()" title="Zoom Out"><i class="fas fa-minus"></i></button>
+  </div>
+  <div class="map-ctrl-group">
+    <button class="map-ctrl-btn active" id="btn3d" onclick="toggle3d(this)" title="3D"><i class="fas fa-cube"></i></button>
+    <button class="map-ctrl-btn" onclick="toggleFullscreen()" title="Fullscreen"><i class="fas fa-expand"></i></button>
+  </div>
+  <div class="map-ctrl-group">
+    <button class="map-ctrl-btn" onclick="locateMe()" title="My Location"><i class="fas fa-crosshairs"></i></button>
+  </div>
+</div>
+
+<!-- Bottom toggles -->
+<div class="bottom-toggles">
+  <div class="toggle-pill active" id="pressureToggle" onclick="togglePressure(this)">
+    <i class="fas fa-circle-dot"></i> Pressure
+  </div>
+  <div class="toggle-pill" id="particleToggle" onclick="toggleParticles(this)">
+    <i class="fas fa-wind"></i> Particles
+  </div>
+</div>
+
+<!-- Color scale -->
+<div class="color-scale">
+  <div class="scale-bar" id="scaleBar"></div>
+  <div class="scale-labels">
+    <span class="scale-label" id="scaleMin">0</span>
+    <span class="scale-label" id="scaleMid">50</span>
+    <span class="scale-label" id="scaleMax">100</span>
+  </div>
+</div>
+
+<!-- Coordinates display -->
+<div class="coords-display" id="coordsDisplay">
+  <span id="latDisplay">LAT: --</span>
+  <span id="lonDisplay">LON: --</span>
+  <span id="zoomDisplay">ZOOM: 4</span>
+</div>
+
+<!-- Model switcher -->
+<div class="model-switcher">
+  <button class="model-btn active" onclick="switchModel(this,'ECMWF')">ECMWF WAM<span>9km</span></button>
+  <button class="model-btn" onclick="switchModel(this,'GFS')">GFS WAVE<span>22km</span></button>
+  <button class="model-btn" onclick="switchModel(this,'ICON')">ICON<span>13km</span></button>
+</div>
+
+<!-- TIMELINE BAR -->
+<div class="timeline-bar">
+  <div class="timeline-top">
+    <button class="play-btn" id="playBtn" onclick="togglePlay()"><i class="fas fa-play" id="playIcon"></i></button>
+    <div class="time-display" id="timeDisplay">Wed 18 · 11 AM</div>
+    <div class="timeline-slider-wrap">
+      <input type="range" class="timeline-slider" id="timelineSlider" min="0" max="100" value="30"
+        oninput="updateTimeline(this.value)" style="--pct:30%"/>
+    </div>
+  </div>
+  <div class="timeline-days" id="timelineDays"></div>
+</div>
+
+<!-- CLICK POPUP -->
+<div class="info-popup" id="infoPopup">
+  <div class="popup-header">
+    <div class="popup-coords" id="popupCoords">N23°17'42" · E77°52'44"</div>
+    <button class="popup-close" onclick="closePopup()"><i class="fas fa-times"></i></button>
+  </div>
+  <div class="popup-body">
+    <div class="popup-row">
+      <div class="popup-icon"><i class="fas fa-mountain"></i></div>
+      <div class="popup-key">Elevation</div>
+      <div class="popup-val" id="popupElevation">-- m AMSL</div>
+    </div>
+    <div class="popup-row">
+      <div class="popup-icon"><i class="fas fa-wind"></i></div>
+      <div class="popup-key">Wind Speed</div>
+      <div class="popup-val" id="popupWind">-- km/h</div>
+    </div>
+    <div class="popup-row">
+      <div class="popup-icon"><i class="fas fa-compass"></i></div>
+      <div class="popup-key">Wind Direction</div>
+      <div class="popup-val" id="popupWindDir">--°</div>
+    </div>
+    <div class="popup-row">
+      <div class="popup-icon"><i class="fas fa-temperature-half"></i></div>
+      <div class="popup-key">Temperature</div>
+      <div class="popup-val" id="popupTemp">-- °C</div>
+    </div>
+    <div class="popup-row">
+      <div class="popup-icon"><i class="fas fa-droplet"></i></div>
+      <div class="popup-key">Humidity</div>
+      <div class="popup-val" id="popupHumidity">--%</div>
+    </div>
+    <div class="popup-row">
+      <div class="popup-icon"><i class="fas fa-gauge"></i></div>
+      <div class="popup-key">Pressure</div>
+      <div class="popup-val" id="popupPressure">-- hPa</div>
+    </div>
+    <div class="popup-row">
+      <div class="popup-icon"><i class="fas fa-eye"></i></div>
+      <div class="popup-key">Visibility</div>
+      <div class="popup-val" id="popupVis">-- km</div>
+    </div>
+  </div>
+  <div class="popup-actions">
+    <button class="popup-action-btn" onclick="goForecast()">
+      <i class="fas fa-chart-line"></i>Forecast
+    </button>
+    <button class="popup-action-btn">
+      <i class="fas fa-ruler"></i>Distance
+    </button>
+    <button class="popup-action-btn">
+      <i class="fas fa-waveform-lines"></i>Sounding
+    </button>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="../js/Map.js"></script>
+</body>
+</html>

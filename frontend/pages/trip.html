@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>SkySafe | AI Weather Trip Planner</title>
+<meta name="description" content="Plan real, weather-smart trips with AI. Get city-specific itineraries, live weather adaptation, budget breakdowns and real attraction details."/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Rajdhani:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --bg:#020810;--bg2:#050d1c;--bg3:#091428;--bg4:#0d1d38;
+  --card:rgba(6,16,34,0.92);--card2:rgba(9,20,42,0.88);
+  --border:rgba(0,180,255,0.07);--border-h:rgba(0,180,255,0.18);
+  --red:#ff1f3d;--orange:#ff7b00;--yellow:#ffc800;--green:#00e87a;--blue:#00b8ff;--purple:#a855f7;--cyan:#06ffd8;--pink:#f472b6;
+  --text:#b8d0e8;--text-dim:#344a66;--text-mid:#5a7a99;--text-bright:#daeeff;
+  --nav-h:62px;
+  --font-head:'Orbitron',monospace;--font-body:'Rajdhani',sans-serif;--font-mono:'JetBrains Mono',monospace;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:var(--font-body);font-size:15px;min-height:100vh;overflow-x:hidden}
+a{text-decoration:none}
+#bgCanvas{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.6}
+
+/* NAV */
+.nav{position:fixed;top:0;left:0;right:0;height:var(--nav-h);z-index:900;
+  background:rgba(2,8,16,0.97);border-bottom:1px solid rgba(0,180,255,0.09);
+  backdrop-filter:blur(20px);display:flex;align-items:center;padding:0 28px;gap:0}
+.nav-brand{font-family:var(--font-head);font-size:1.15rem;font-weight:900;color:#fff;letter-spacing:3px;margin-right:auto}
+.nav-brand em{color:var(--red);font-style:normal}
+.nav-brand a{text-decoration:none;color:inherit}
+.nav-pill{display:flex;align-items:center;gap:7px;background:rgba(0,180,255,0.05);
+  border:1px solid rgba(0,180,255,0.12);border-radius:20px;padding:5px 14px;margin-right:18px}
+.nav-pulse{width:7px;height:7px;background:var(--green);border-radius:50%;animation:blink 2s infinite}
+@keyframes blink{0%,100%{box-shadow:0 0 0 0 rgba(0,232,122,.5)}50%{box-shadow:0 0 0 5px rgba(0,232,122,0)}}
+.nav-pill-txt{font-family:var(--font-head);font-size:.52rem;letter-spacing:3px;color:var(--text-mid)}
+.nav-links{display:flex;gap:6px;margin-right:16px}
+.nav-link{font-family:var(--font-head);font-size:.48rem;letter-spacing:2px;color:var(--text-mid);
+  padding:5px 12px;border:1px solid rgba(255,255,255,.04);border-radius:8px;transition:all .2s;cursor:pointer}
+.nav-link:hover,.nav-link.act{color:var(--blue);border-color:rgba(0,180,255,.2);background:rgba(0,180,255,.05)}
+.nav-agent-badge{display:flex;align-items:center;gap:6px;margin-right:16px;font-family:var(--font-head);
+  font-size:.5rem;letter-spacing:2px;color:var(--purple);background:rgba(168,85,247,.07);
+  border:1px solid rgba(168,85,247,.18);border-radius:20px;padding:5px 12px}
+.nav-agent-badge i{font-size:.7rem}
+.nav-clock{font-family:var(--font-mono);font-size:.78rem;color:var(--blue);letter-spacing:2px;
+  padding:6px 14px;border:1px solid rgba(0,180,255,.15);border-radius:8px;background:rgba(0,180,255,.04)}
+
+/* HERO */
+.hero{position:relative;padding:calc(var(--nav-h) + 52px) 44px 48px;z-index:1;overflow:hidden}
+.hero-grid{position:absolute;inset:0;pointer-events:none;
+  background-image:linear-gradient(rgba(0,180,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(0,180,255,.025) 1px,transparent 1px);
+  background-size:44px 44px}
+.hero-glow{position:absolute;top:-120px;left:-80px;width:600px;height:400px;
+  background:radial-gradient(ellipse,rgba(0,100,255,.07) 0%,transparent 70%);pointer-events:none}
+.hero-content{position:relative;z-index:1;max-width:720px}
+.hero-tag{display:inline-flex;align-items:center;gap:8px;font-family:var(--font-head);font-size:.52rem;
+  letter-spacing:3.5px;color:var(--cyan);background:rgba(6,255,216,.05);
+  border:1px solid rgba(6,255,216,.15);border-radius:30px;padding:6px 16px;margin-bottom:20px}
+.hero-tag-dot{width:6px;height:6px;background:var(--cyan);border-radius:50%;animation:blink 2s infinite}
+.hero-h1{font-family:var(--font-head);font-size:clamp(2.8rem,7vw,5.2rem);font-weight:900;
+  line-height:.95;letter-spacing:-2px;color:#fff;margin-bottom:18px}
+.hero-h1 span{color:var(--blue)}
+.hero-h1 em{color:var(--cyan);font-style:normal}
+.hero-sub{font-size:1.05rem;color:var(--text-mid);line-height:1.65;max-width:560px;margin-bottom:24px}
+.hero-agents{display:flex;gap:10px;flex-wrap:wrap}
+.agent-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;
+  border-radius:20px;font-family:var(--font-head);font-size:.48rem;letter-spacing:2px;
+  border:1px solid;transition:all .25s}
+.agent-chip.research{color:#60a5fa;border-color:rgba(96,165,250,.2);background:rgba(96,165,250,.06)}
+.agent-chip.budget{color:var(--green);border-color:rgba(0,232,122,.2);background:rgba(0,232,122,.05)}
+.agent-chip.itinerary{color:var(--yellow);border-color:rgba(255,200,0,.2);background:rgba(255,200,0,.05)}
+.agent-chip.recommend{color:var(--purple);border-color:rgba(168,85,247,.2);background:rgba(168,85,247,.06)}
+
+/* MAIN */
+.main{position:relative;z-index:1;padding:0 44px 80px;max-width:1440px;margin:0 auto}
+@media(max-width:780px){.main{padding:0 18px 50px}.hero{padding:calc(var(--nav-h)+28px) 18px 28px}}
+
+/* CARD */
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;
+  padding:26px;backdrop-filter:blur(10px);transition:border-color .25s}
+.card:hover{border-color:var(--border-h)}
+.card2{background:var(--card2);border:1px solid rgba(255,255,255,.04);border-radius:10px;padding:18px}
+.mb{margin-bottom:24px}
+
+.c-hdr{display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:22px;padding-bottom:14px;border-bottom:1px solid rgba(255,255,255,.04)}
+.c-hdr-l{display:flex;align-items:center;gap:10px}
+.c-title{font-family:var(--font-head);font-size:.68rem;font-weight:700;letter-spacing:2.5px;
+  color:#fff;display:flex;align-items:center;gap:9px}
+.c-title i{color:var(--blue);font-size:.8rem}
+.dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.dot-blue{background:var(--blue);box-shadow:0 0 7px var(--blue)}
+.dot-green{background:var(--green);box-shadow:0 0 7px var(--green)}
+.dot-red{background:var(--red);box-shadow:0 0 7px var(--red)}
+.dot-yellow{background:var(--yellow);box-shadow:0 0 7px var(--yellow)}
+.dot-orange{background:var(--orange);box-shadow:0 0 7px var(--orange)}
+.dot-purple{background:var(--purple);box-shadow:0 0 7px var(--purple)}
+.dot-cyan{background:var(--cyan);box-shadow:0 0 7px var(--cyan)}
+
+/* === FORM === */
+.form-wrap{max-width:1000px;margin:0 auto 36px}
+.form-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px;margin-bottom:22px}
+@media(max-width:780px){.form-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:480px){.form-grid{grid-template-columns:1fr}}
+.f-group{position:relative}
+.f-label{display:flex;align-items:center;gap:6px;font-family:var(--font-head);font-size:.52rem;
+  letter-spacing:2.5px;color:var(--text-mid);margin-bottom:9px}
+.f-label i{color:var(--blue);font-size:.6rem}
+.f-label .req{color:var(--red);margin-left:2px}
+.f-input{width:100%;background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.07);
+  border-radius:9px;color:var(--text-bright);font-family:var(--font-body);font-size:.95rem;
+  padding:11px 15px;outline:none;transition:border-color .2s,box-shadow .2s;-webkit-appearance:none}
+.f-input:focus{border-color:rgba(0,180,255,.45);box-shadow:0 0 0 3px rgba(0,180,255,.07)}
+.f-input::placeholder{color:var(--text-dim)}
+.f-input::-webkit-calendar-picker-indicator{filter:invert(.35)}
+.f-select{cursor:pointer}
+.f-select option{background:var(--bg3);color:var(--text-bright)}
+.f-wrap{position:relative}
+.locate-btn{position:absolute;right:9px;top:50%;transform:translateY(-50%);
+  width:32px;height:32px;background:rgba(0,180,255,.08);border:1px solid rgba(0,180,255,.2);
+  border-radius:7px;color:var(--blue);cursor:pointer;font-size:.72rem;
+  display:flex;align-items:center;justify-content:center;transition:all .2s}
+.locate-btn:hover{background:rgba(0,180,255,.18)}
+
+/* SUGGESTIONS */
+.sug-box{position:absolute;top:calc(100% + 5px);left:0;right:0;background:var(--bg3);
+  border:1px solid rgba(0,180,255,.18);border-radius:10px;z-index:300;overflow:hidden;
+  display:none;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+.sug-box.open{display:block}
+.sug-item{padding:10px 15px;font-size:.85rem;color:var(--text);cursor:pointer;
+  border-bottom:1px solid rgba(255,255,255,.03);display:flex;align-items:center;gap:9px;transition:background .15s}
+.sug-item:hover{background:rgba(0,180,255,.08);color:var(--blue)}
+.sug-item i{color:var(--text-dim);font-size:.7rem;flex-shrink:0}
+.sug-item:last-child{border-bottom:none}
+
+/* DESTINATION CATEGORY */
+.cat-section{margin-bottom:22px}
+.cat-label{display:flex;align-items:center;gap:6px;font-family:var(--font-head);font-size:.52rem;letter-spacing:2.5px;color:var(--text-mid);margin-bottom:12px}
+.cat-label i{color:var(--blue);font-size:.6rem}
+.cat-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:10px}
+@media(max-width:780px){.cat-grid{grid-template-columns:repeat(4,1fr)}}
+@media(max-width:480px){.cat-grid{grid-template-columns:repeat(2,1fr)}}
+.cat-card{border:1px solid rgba(255,255,255,.07);border-radius:11px;padding:12px 8px;
+  text-align:center;cursor:pointer;transition:all .22s;background:rgba(255,255,255,.02)}
+.cat-card:hover{border-color:rgba(0,180,255,.25);background:rgba(0,180,255,.05)}
+.cat-card.on{background:rgba(0,180,255,.12);border-color:rgba(0,180,255,.45);box-shadow:0 0 18px rgba(0,180,255,.12)}
+.cat-card .cat-icon{font-size:1.6rem;margin-bottom:6px;display:block}
+.cat-card .cat-name{font-family:var(--font-head);font-size:.42rem;letter-spacing:1.5px;color:var(--text-mid)}
+.cat-card.on .cat-name{color:var(--blue)}
+
+/* PEOPLE + input number */
+.people-row{display:flex;align-items:center;gap:10px}
+.people-btn{width:32px;height:32px;border-radius:50%;border:1px solid rgba(0,180,255,.25);
+  background:rgba(0,180,255,.06);color:var(--blue);cursor:pointer;font-size:1rem;
+  display:flex;align-items:center;justify-content:center;transition:all .2s;flex-shrink:0}
+.people-btn:hover{background:rgba(0,180,255,.18)}
+.people-val{font-family:var(--font-head);font-size:1.2rem;color:#fff;min-width:32px;text-align:center}
+
+/* INTERESTS */
+.interests-row{margin-bottom:22px}
+.chips{display:flex;flex-wrap:wrap;gap:9px;margin-top:11px}
+.chip{font-family:var(--font-body);font-size:.83rem;padding:7px 16px;border-radius:22px;
+  border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);
+  color:var(--text-mid);cursor:pointer;transition:all .2s;user-select:none}
+.chip.on{background:rgba(0,180,255,.1);border-color:rgba(0,180,255,.38);color:var(--blue)}
+.chip:hover{border-color:rgba(0,180,255,.25);color:var(--text)}
+
+/* FORM FOOTER */
+.f-footer{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.f-err{font-size:.82rem;color:var(--red)}
+.btn-gen{position:relative;font-family:var(--font-head);font-size:.62rem;letter-spacing:2px;color:#fff;
+  background:linear-gradient(135deg,rgba(0,80,180,.7),rgba(0,180,255,.35));
+  border:1px solid rgba(0,180,255,.5);border-radius:9px;padding:13px 32px;cursor:pointer;
+  display:flex;align-items:center;gap:9px;overflow:hidden;transition:all .2s;margin-left:auto}
+.btn-gen:hover{background:linear-gradient(135deg,rgba(0,100,200,.8),rgba(0,180,255,.5));
+  box-shadow:0 0 28px rgba(0,180,255,.25);transform:translateY(-1px)}
+.btn-gen:active{transform:translateY(0)}
+.btn-gen-glow{position:absolute;inset:0;background:linear-gradient(135deg,transparent 50%,rgba(0,180,255,.12));pointer-events:none}
+
+/* PIPELINE */
+.pipeline{display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap}
+.pipeline-step{flex:1;min-width:130px;padding:12px 14px;border-radius:9px;
+  border:1px solid rgba(255,255,255,.05);background:rgba(255,255,255,.02);transition:all .35s}
+.pipeline-step.ps-active{background:rgba(0,180,255,.07);border-color:rgba(0,180,255,.25)}
+.pipeline-step.ps-done{background:rgba(0,232,122,.05);border-color:rgba(0,232,122,.2)}
+.ps-icon{font-size:1.1rem;margin-bottom:6px}
+.ps-name{font-family:var(--font-head);font-size:.5rem;letter-spacing:2px;color:var(--text-dim);margin-bottom:3px}
+.pipeline-step.ps-active .ps-name{color:var(--blue)}
+.pipeline-step.ps-done .ps-name{color:var(--green)}
+.ps-status{font-size:.75rem;color:var(--text-dim)}
+.pipeline-step.ps-active .ps-status{color:var(--blue)}
+.pipeline-step.ps-done .ps-status{color:var(--green)}
+
+/* LOADING */
+.loading-wrap{display:none;max-width:960px;margin:0 auto}
+.loading-card{text-align:center;padding:50px 28px}
+.loading-orbit{position:relative;width:90px;height:90px;margin:0 auto 28px}
+.loading-orbit-ring{position:absolute;inset:0;border-radius:50%;border:2px solid transparent;
+  border-top-color:var(--blue);animation:orbit 1.2s linear infinite}
+.loading-orbit-ring:nth-child(2){inset:8px;border-top-color:var(--cyan);animation-duration:.9s;animation-direction:reverse}
+.loading-orbit-ring:nth-child(3){inset:16px;border-top-color:var(--purple);animation-duration:1.5s}
+.loading-center{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:1.4rem;color:var(--blue)}
+@keyframes orbit{to{transform:rotate(360deg)}}
+.loading-title{font-family:var(--font-head);font-size:1rem;letter-spacing:3px;color:#fff;margin-bottom:10px}
+.loading-sub{font-size:.85rem;color:var(--text-mid);margin-bottom:28px}
+.log-stream{max-height:160px;overflow-y:auto;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.04);
+  border-radius:9px;padding:14px;text-align:left;font-family:var(--font-mono);font-size:.72rem;
+  color:var(--text-mid);line-height:1.8}
+.log-line{display:block;animation:fadeIn .3s ease}
+.log-line.ok{color:var(--green)}
+.log-line.info{color:var(--blue)}
+.log-line.warn{color:var(--yellow)}
+.log-line.agent{color:var(--purple)}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+/* RESULTS */
+.trip-banner{background:linear-gradient(135deg,rgba(0,80,200,.14),rgba(0,180,255,.06));
+  border:1px solid rgba(0,180,255,.18);border-radius:14px;padding:22px 28px;
+  display:flex;align-items:center;gap:22px;margin-bottom:26px;flex-wrap:wrap}
+.tb-left{flex:1;min-width:200px}
+.tb-route{font-family:var(--font-head);font-size:1.3rem;font-weight:900;color:#fff;letter-spacing:1px}
+.tb-meta{font-size:.84rem;color:var(--text-mid);margin-top:5px}
+.tb-stats{display:flex;gap:14px;flex-wrap:wrap}
+.tb-stat{text-align:center;padding:9px 18px;background:rgba(255,255,255,.03);
+  border:1px solid rgba(255,255,255,.06);border-radius:9px;min-width:80px}
+.tb-stat-val{font-family:var(--font-head);font-size:1.05rem;color:var(--blue)}
+.tb-stat-lbl{font-size:.68rem;color:var(--text-dim);margin-top:2px}
+.tb-right{display:flex;gap:9px;flex-wrap:wrap}
+.btn-sm{font-family:var(--font-head);font-size:.52rem;letter-spacing:1.5px;color:var(--blue);
+  background:rgba(0,180,255,.06);border:1px solid rgba(0,180,255,.22);border-radius:7px;
+  padding:8px 16px;cursor:pointer;display:flex;align-items:center;gap:7px;transition:all .2s}
+.btn-sm:hover{background:rgba(0,180,255,.14);border-color:rgba(0,180,255,.45)}
+
+/* DESTINATION HIGHLIGHT CARD */
+.dest-highlight{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:26px}
+@media(max-width:780px){.dest-highlight{grid-template-columns:1fr 1fr}}
+.dh-card{padding:16px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05);
+  border-radius:10px;transition:border-color .2s}
+.dh-card:hover{border-color:rgba(0,180,255,.18)}
+.dh-label{font-family:var(--font-head);font-size:.5rem;letter-spacing:2px;color:var(--text-dim);margin-bottom:6px}
+.dh-val{font-size:.9rem;color:var(--text-bright);line-height:1.4}
+
+/* RESULTS GRID */
+.res-grid{display:grid;grid-template-columns:1fr 360px;gap:26px;align-items:start}
+@media(max-width:1150px){.res-grid{grid-template-columns:1fr}.res-right{display:grid;grid-template-columns:1fr 1fr;gap:26px}}
+@media(max-width:640px){.res-right{grid-template-columns:1fr}}
+
+/* MAP */
+#tripMap{height:400px;border-radius:10px;overflow:hidden;border:1px solid rgba(0,180,255,.12)}
+.leaflet-container{background:#04101e!important}
+.leaflet-popup-content-wrapper{background:var(--bg3)!important;border:1px solid rgba(0,180,255,.22)!important;
+  border-radius:9px!important;color:var(--text)!important;font-family:var(--font-body)!important}
+.leaflet-popup-tip{background:var(--bg3)!important}
+.leaflet-popup-content{margin:13px 16px!important}
+.pop-title{font-family:var(--font-head);font-size:.62rem;letter-spacing:1px;color:var(--blue);margin-bottom:5px}
+.pop-body{font-size:.82rem;color:var(--text-mid);line-height:1.6}
+.pop-tag{display:inline-block;font-size:.6rem;padding:2px 9px;border-radius:12px;margin-top:6px;
+  font-family:var(--font-head);letter-spacing:1px}
+.map-legend{display:flex;gap:10px;flex-wrap:wrap}
+.ml-item{display:flex;align-items:center;gap:5px;font-size:.7rem;color:var(--text-dim)}
+.ml-dot{width:9px;height:9px;border-radius:50%}
+
+/* ITINERARY — TIME SLOTS */
+.day-tabs{display:flex;gap:7px;flex-wrap:wrap}
+.day-tab{font-family:var(--font-head);font-size:.5rem;letter-spacing:1px;padding:6px 12px;
+  border-radius:7px;border:1px solid rgba(255,255,255,.07);background:transparent;
+  color:var(--text-dim);cursor:pointer;transition:all .2s}
+.day-tab.on{background:rgba(0,180,255,.1);border-color:rgba(0,180,255,.35);color:var(--blue)}
+.day-panel{display:none}
+.day-panel.on{display:block}
+.day-hdr{display:flex;align-items:center;gap:14px;padding:14px 0;
+  border-bottom:1px solid rgba(255,255,255,.04);margin-bottom:18px}
+.day-num-big{font-family:var(--font-head);font-size:2rem;font-weight:900;
+  color:rgba(0,180,255,.14);line-height:1;min-width:56px}
+.day-title{font-family:var(--font-head);font-size:.72rem;letter-spacing:2px;color:#fff}
+.day-sub{font-size:.8rem;color:var(--text-mid);margin-top:4px}
+.weather-note-badge{display:inline-flex;align-items:center;gap:5px;margin-top:6px;
+  font-size:.73rem;padding:3px 11px;background:rgba(255,200,0,.07);
+  border:1px solid rgba(255,200,0,.18);border-radius:20px;color:var(--yellow)}
+
+/* TIME SLOT */
+.time-slot{margin-bottom:18px}
+.ts-header{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;margin-bottom:12px}
+.ts-header.morning{background:rgba(255,200,0,.06);border:1px solid rgba(255,200,0,.12)}
+.ts-header.afternoon{background:rgba(0,180,255,.05);border:1px solid rgba(0,180,255,.12)}
+.ts-header.evening{background:rgba(168,85,247,.05);border:1px solid rgba(168,85,247,.12)}
+.ts-icon{font-size:1rem}
+.ts-label{font-family:var(--font-head);font-size:.55rem;letter-spacing:2px}
+.ts-header.morning .ts-label{color:var(--yellow)}
+.ts-header.afternoon .ts-label{color:var(--blue)}
+.ts-header.evening .ts-label{color:var(--purple)}
+.ts-time{font-family:var(--font-mono);font-size:.65rem;color:var(--text-dim);margin-left:auto}
+.place-card{display:flex;gap:15px;padding:14px;background:rgba(255,255,255,.02);
+  border:1px solid rgba(255,255,255,.04);border-radius:11px;margin-bottom:10px;transition:all .2s}
+.place-card:hover{border-color:rgba(0,180,255,.18);background:rgba(0,180,255,.03)}
+.place-num{width:30px;height:30px;border-radius:50%;background:rgba(0,180,255,.08);
+  border:1px solid rgba(0,180,255,.22);display:flex;align-items:center;justify-content:center;
+  font-family:var(--font-head);font-size:.58rem;color:var(--blue);flex-shrink:0;margin-top:2px}
+.place-info{flex:1}
+.place-name{font-family:var(--font-head);font-size:.63rem;letter-spacing:1px;color:#fff;margin-bottom:5px}
+.place-desc{font-size:.83rem;color:var(--text-mid);line-height:1.55}
+.place-tags{display:flex;gap:7px;margin-top:8px;flex-wrap:wrap}
+.ptag{font-size:.62rem;padding:2px 9px;border-radius:12px;background:rgba(0,180,255,.07);
+  border:1px solid rgba(0,180,255,.16);color:var(--blue)}
+.ptag.o{background:rgba(255,123,0,.07);border-color:rgba(255,123,0,.2);color:var(--orange)}
+.ptag.g{background:rgba(0,232,122,.07);border-color:rgba(0,232,122,.2);color:var(--green)}
+.ptag.y{background:rgba(255,200,0,.07);border-color:rgba(255,200,0,.2);color:var(--yellow)}
+.ptag.p{background:rgba(168,85,247,.07);border-color:rgba(168,85,247,.2);color:var(--purple)}
+.ptag.r{background:rgba(255,31,61,.07);border-color:rgba(255,31,61,.2);color:var(--red)}
+.cost-badge{display:inline-flex;align-items:center;gap:4px;font-family:var(--font-mono);font-size:.62rem;
+  color:var(--green);background:rgba(0,232,122,.06);border:1px solid rgba(0,232,122,.15);
+  border-radius:8px;padding:2px 8px;margin-top:6px}
+.day-tip-box{background:rgba(255,200,0,.05);border:1px solid rgba(255,200,0,.14);
+  border-radius:9px;padding:11px 15px;font-size:.82rem;color:var(--yellow);
+  display:flex;align-items:flex-start;gap:9px;margin-top:10px}
+.agent-log-badge{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-head);
+  font-size:.48rem;letter-spacing:2px;color:var(--purple);background:rgba(168,85,247,.07);
+  border:1px solid rgba(168,85,247,.18);border-radius:20px;padding:4px 11px}
+
+/* BUDGET */
+.budget-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.b-cat{padding:12px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05);border-radius:9px}
+.b-cat-name{font-family:var(--font-head);font-size:.54rem;letter-spacing:1.5px;color:var(--text-mid);margin-bottom:5px}
+.b-cat-val{font-family:var(--font-head);font-size:.95rem;color:var(--blue)}
+.b-cat-pct{font-size:.75rem;color:var(--text-dim);margin-top:2px}
+.budget-bar{height:6px;background:rgba(255,255,255,.05);border-radius:10px;overflow:hidden;margin-top:10px}
+.budget-bar-fill{height:100%;border-radius:10px;transition:width .6s ease;background:linear-gradient(90deg,var(--blue),var(--cyan))}
+.budget-total{display:flex;justify-content:space-between;align-items:center;
+  padding:12px 0;border-top:1px solid rgba(255,255,255,.05);margin-top:10px}
+.bt-label{font-family:var(--font-head);font-size:.56rem;letter-spacing:2px;color:var(--text-mid)}
+.bt-val{font-family:var(--font-head);font-size:1rem;color:var(--green)}
+.bt-pp{font-family:var(--font-head);font-size:.72rem;color:var(--cyan);margin-top:3px}
+.saving-tip{padding:10px 13px;background:rgba(0,232,122,.05);border:1px solid rgba(0,232,122,.14);
+  border-radius:8px;font-size:.8rem;color:var(--green);margin-top:10px}
+
+/* WEATHER */
+.weather-hero{display:flex;align-items:center;gap:18px;padding:15px;
+  background:rgba(255,200,0,.04);border:1px solid rgba(255,200,0,.1);border-radius:10px;margin-bottom:13px}
+.w-emoji{font-size:2.8rem}
+.w-temp{font-family:var(--font-head);font-size:2rem;font-weight:700;color:#fff}
+.w-desc{font-size:.83rem;color:var(--text-mid);text-transform:capitalize;margin-top:3px}
+.w-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.wstat{padding:9px 13px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05);border-radius:8px;text-align:center}
+.wstat-val{font-family:var(--font-head);font-size:.82rem;color:var(--blue)}
+.wstat-lbl{font-size:.7rem;color:var(--text-dim);margin-top:2px}
+.w-score{margin-top:13px;padding:12px;border-radius:9px;border:1px solid rgba(0,180,255,.15);background:rgba(0,180,255,.04)}
+.ws-lbl{font-family:var(--font-head);font-size:.52rem;letter-spacing:2px;color:var(--text-mid);margin-bottom:8px}
+.ws-bar{background:rgba(255,255,255,.05);border-radius:20px;height:7px;overflow:hidden}
+.ws-fill{height:100%;border-radius:20px;transition:width .7s}
+.ws-txt{font-family:var(--font-head);font-size:.78rem;margin-top:7px}
+
+/* SAFETY */
+.safety-item{display:flex;gap:13px;padding:13px;border-radius:9px;margin-bottom:9px;border:1px solid transparent}
+.safety-item.high{background:rgba(255,31,61,.06);border-color:rgba(255,31,61,.14)}
+.safety-item.medium{background:rgba(255,123,0,.06);border-color:rgba(255,123,0,.14)}
+.safety-item.low{background:rgba(0,232,122,.04);border-color:rgba(0,232,122,.1)}
+.s-icon{font-size:1.15rem;flex-shrink:0;margin-top:1px}
+.s-title{font-family:var(--font-head);font-size:.58rem;letter-spacing:1px;color:#fff;margin-bottom:3px}
+.s-desc{font-size:.8rem;color:var(--text-mid);line-height:1.45}
+
+/* RECOMMENDATIONS */
+.rec-section{margin-bottom:16px}
+.rec-section-title{font-family:var(--font-head);font-size:.56rem;letter-spacing:2px;
+  color:var(--text-mid);margin-bottom:10px;padding-bottom:7px;border-bottom:1px solid rgba(255,255,255,.04)}
+.rec-item{display:flex;gap:10px;padding:10px 12px;background:rgba(255,255,255,.02);
+  border:1px solid rgba(255,255,255,.04);border-radius:9px;margin-bottom:8px}
+.rec-icon{font-size:1rem;flex-shrink:0}
+.rec-name{font-family:var(--font-head);font-size:.58rem;letter-spacing:1px;color:#fff;margin-bottom:3px}
+.rec-desc{font-size:.78rem;color:var(--text-mid)}
+.rec-badge{display:inline-block;font-size:.58rem;padding:2px 8px;border-radius:8px;margin-top:4px;
+  background:rgba(168,85,247,.08);border:1px solid rgba(168,85,247,.18);color:var(--purple)}
+.must-dish{font-size:.68rem;color:var(--cyan);margin-top:3px}
+
+/* HOTELS */
+.hotel-card{padding:13px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.04);
+  border-radius:9px;margin-bottom:9px;transition:border-color .2s}
+.hotel-card:hover{border-color:rgba(0,180,255,.18)}
+.hotel-name{font-family:var(--font-head);font-size:.62rem;letter-spacing:1px;color:#fff;margin-bottom:5px}
+.hotel-meta{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:5px}
+.hotel-stars{color:var(--yellow);font-size:.75rem}
+.hotel-price{font-family:var(--font-head);font-size:.8rem;color:var(--green)}
+.hotel-loc{font-size:.78rem;color:var(--text-mid)}
+.hotel-desc{font-size:.78rem;color:var(--text-mid);line-height:1.4}
+.amenity-tags{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}
+.amenity{font-size:.6rem;padding:2px 8px;border-radius:8px;background:rgba(0,180,255,.07);
+  border:1px solid rgba(0,180,255,.15);color:var(--blue)}
+
+/* PACKING */
+.pack-prog{font-family:var(--font-head);font-size:.52rem;letter-spacing:2px;color:var(--green)}
+.pack-item{display:flex;align-items:center;gap:10px;padding:9px 0;
+  border-bottom:1px solid rgba(255,255,255,.03);cursor:pointer;transition:color .2s;
+  font-size:.85rem;color:var(--text)}
+.pack-item:last-child{border-bottom:none}
+.pack-item.done{color:var(--text-dim);text-decoration:line-through}
+.pack-check{width:19px;height:19px;border-radius:5px;border:1px solid rgba(0,180,255,.25);
+  background:rgba(0,180,255,.04);display:flex;align-items:center;justify-content:center;
+  font-size:.65rem;color:var(--green);flex-shrink:0}
+.pack-item.done .pack-check{background:rgba(0,232,122,.1);border-color:rgba(0,232,122,.3)}
+
+/* EMERGENCY */
+.ec-item{display:flex;align-items:center;gap:11px;padding:11px;background:rgba(255,255,255,.02);
+  border:1px solid rgba(255,255,255,.04);border-radius:9px;margin-bottom:9px}
+.ec-icon{width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;
+  font-size:.95rem;flex-shrink:0;background:rgba(255,31,61,.08);border:1px solid rgba(255,31,61,.16)}
+.ec-name{font-family:var(--font-head);font-size:.56rem;letter-spacing:1px;color:#fff}
+.ec-num{font-size:.83rem;color:var(--blue);margin-top:2px}
+
+/* ALERTS BANNER */
+.alert-banner{margin-bottom:22px;padding:13px 20px;border-radius:10px;
+  display:flex;align-items:center;gap:13px;font-size:.85rem;border:1px solid}
+.alert-banner.good{background:rgba(0,232,122,.05);border-color:rgba(0,232,122,.2);color:var(--green)}
+.alert-banner.warn{background:rgba(255,123,0,.07);border-color:rgba(255,123,0,.22);color:var(--orange)}
+.alert-banner.danger{background:rgba(255,31,61,.06);border-color:rgba(255,31,61,.2);color:var(--red)}
+.alert-icon{font-size:1.3rem;flex-shrink:0}
+
+/* TOAST */
+.toast-stack{position:fixed;bottom:26px;right:26px;z-index:9999;display:flex;flex-direction:column;gap:9px}
+.toast{display:flex;align-items:center;gap:11px;padding:11px 18px;background:var(--bg3);
+  border-radius:9px;font-size:.83rem;color:var(--text);min-width:270px;max-width:360px;
+  animation:tIn .3s ease;box-shadow:0 6px 24px rgba(0,0,0,.5)}
+.toast.red{border-left:3px solid var(--red)}
+.toast.green{border-left:3px solid var(--green)}
+.toast.blue{border-left:3px solid var(--blue)}
+.toast.orange{border-left:3px solid var(--orange)}
+.toast.purple{border-left:3px solid var(--purple)}
+.t-icon{font-size:1rem}
+.t-msg{font-size:.82rem}
+.t-lbl{font-size:.62rem;color:var(--text-dim);margin-top:2px}
+@keyframes tIn{from{opacity:0;transform:translateX(22px)}to{opacity:1;transform:none}}
+
+/* PRINT */
+@media print{
+  #bgCanvas,.nav,.hero,.form-wrap,.loading-wrap,.toast-stack,.tb-right,.btn-sm{display:none!important}
+  body{background:#fff;color:#000}
+  .card{border:1px solid #ddd;break-inside:avoid}
+  .c-title,.tb-route,.place-name,.day-title{color:#000!important}
+}
+</style>
+</head>
+<body>
+<canvas id="bgCanvas"></canvas>
+
+<!-- NAV -->
+<nav class="nav">
+  <div class="nav-brand"><a href="../index.html">SKY<em>SAFE</em></a></div>
+  <div class="nav-links">
+    <a class="nav-link" href="forecast.html"><i class="fas fa-cloud-sun"></i> Forecast</a>
+    <a class="nav-link" href="alert.html"><i class="fas fa-bell"></i> Alerts</a>
+    <a class="nav-link" href="Map.html"><i class="fas fa-map"></i> Map</a>
+    <span class="nav-link act"><i class="fas fa-route"></i> Trip Planner</span>
+  </div>
+  <div class="nav-agent-badge"><i class="fas fa-robot"></i> MULTI-AGENT AI</div>
+  <div class="nav-pill"><span class="nav-pulse"></span><span class="nav-pill-txt">TRIP INTELLIGENCE ACTIVE</span></div>
+  <div class="nav-clock" id="navClock">00:00:00</div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag"><span class="hero-tag-dot"></span>REAL WEATHER · REAL PLACES · REAL PLANS</div>
+    <h1 class="hero-h1">AI Weather<br/><span>Trip</span> <em>Planner</em></h1>
+    <p class="hero-sub">City-specific itineraries with real attractions, live weather adaptation, smart budget breakdowns and time-slotted day plans — powered by verified destination intelligence.</p>
+    <div class="hero-agents">
+      <span class="agent-chip research"><i class="fas fa-database"></i> DESTINATION INTEL</span>
+      <span class="agent-chip budget"><i class="fas fa-cloud-sun"></i> LIVE WEATHER</span>
+      <span class="agent-chip itinerary"><i class="fas fa-calendar-days"></i> REAL ITINERARY</span>
+      <span class="agent-chip recommend"><i class="fas fa-wallet"></i> SMART BUDGET</span>
+    </div>
+  </div>
+</section>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- FORM -->
+  <div class="form-wrap" id="formWrap">
+    <div class="card">
+      <div class="c-hdr">
+        <div class="c-hdr-l">
+          <span class="dot dot-blue"></span>
+          <h2 class="c-title"><i class="fas fa-route"></i> Plan Your Journey</h2>
+        </div>
+        <div class="agent-log-badge"><i class="fas fa-robot"></i> AI AGENTS READY</div>
+      </div>
+
+      <!-- Destination Category -->
+      <div class="cat-section">
+        <div class="cat-label"><i class="fas fa-compass"></i> DESTINATION TYPE <span class="req">*</span></div>
+        <div class="cat-grid" id="catGrid">
+          <div class="cat-card on" data-cat="mountains"><span class="cat-icon">🏔</span><span class="cat-name">MOUNTAINS</span></div>
+          <div class="cat-card" data-cat="beaches"><span class="cat-icon">🏖</span><span class="cat-name">BEACHES</span></div>
+          <div class="cat-card" data-cat="spiritual"><span class="cat-icon">🛕</span><span class="cat-name">SPIRITUAL</span></div>
+          <div class="cat-card" data-cat="adventure"><span class="cat-icon">🧗</span><span class="cat-name">ADVENTURE</span></div>
+          <div class="cat-card" data-cat="wildlife"><span class="cat-icon">🐯</span><span class="cat-name">WILDLIFE</span></div>
+          <div class="cat-card" data-cat="historical"><span class="cat-icon">🏛</span><span class="cat-name">HISTORICAL</span></div>
+          <div class="cat-card" data-cat="food"><span class="cat-icon">🍜</span><span class="cat-name">FOOD & CULTURE</span></div>
+          <div class="cat-card" data-cat="family"><span class="cat-icon">👨‍👩‍👧</span><span class="cat-name">FAMILY TRIP</span></div>
+        </div>
+      </div>
+
+      <div class="form-grid">
+        <div class="f-group">
+          <label class="f-label"><i class="fas fa-location-crosshairs"></i> FROM (Current City)</label>
+          <div class="f-wrap">
+            <input type="text" id="fromInput" class="f-input" placeholder="e.g. Delhi" autocomplete="off"/>
+            <button class="locate-btn" onclick="detectLocation()" title="Auto-detect"><i class="fas fa-crosshairs"></i></button>
+            <div class="sug-box" id="fromSug"></div>
+          </div>
+        </div>
+        <div class="f-group">
+          <label class="f-label"><i class="fas fa-map-pin"></i> DESTINATION <span class="req">*</span></label>
+          <div class="f-wrap">
+            <input type="text" id="toInput" class="f-input" placeholder="e.g. Dehradun, Goa, Manali" autocomplete="off"/>
+            <div class="sug-box" id="toSug"></div>
+          </div>
+        </div>
+        <div class="f-group">
+          <label class="f-label"><i class="fas fa-calendar"></i> TRAVEL DATE <span class="req">*</span></label>
+          <input type="date" id="travelDate" class="f-input"/>
+        </div>
+        <div class="f-group">
+          <label class="f-label"><i class="fas fa-moon"></i> DURATION (DAYS) <span class="req">*</span></label>
+          <input type="number" id="travelDays" class="f-input" placeholder="e.g. 3" min="1" max="14" value="3"/>
+        </div>
+        <div class="f-group">
+          <label class="f-label"><i class="fas fa-users"></i> NUMBER OF TRAVELLERS <span class="req">*</span></label>
+          <div class="people-row">
+            <button class="people-btn" onclick="changePeople(-1)"><i class="fas fa-minus"></i></button>
+            <span class="people-val" id="peopleVal">2</span>
+            <button class="people-btn" onclick="changePeople(1)"><i class="fas fa-plus"></i></button>
+            <select id="travellerType" class="f-input f-select" style="flex:1;margin-left:8px">
+              <option value="solo">Solo</option>
+              <option value="couple" selected>Couple</option>
+              <option value="family">Family</option>
+              <option value="group">Group</option>
+              <option value="friends">Friends</option>
+            </select>
+          </div>
+          <input type="hidden" id="peopleCount" value="2"/>
+        </div>
+        <div class="f-group">
+          <label class="f-label"><i class="fas fa-wallet"></i> BUDGET LEVEL</label>
+          <select id="budget" class="f-input f-select">
+            <option value="low">💰 Budget (₹)</option>
+            <option value="medium" selected>💰💰 Moderate (₹₹)</option>
+            <option value="high">💰💰💰 Premium (₹₹₹)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="interests-row">
+        <label class="f-label"><i class="fas fa-heart"></i> INTERESTS (Optional)</label>
+        <div class="chips">
+          <button class="chip on" data-val="nature">🌿 Nature</button>
+          <button class="chip" data-val="history">🏛 History</button>
+          <button class="chip on" data-val="adventure">🧗 Adventure</button>
+          <button class="chip" data-val="food">🍜 Food & Cuisine</button>
+          <button class="chip" data-val="beaches">🏖 Beaches</button>
+          <button class="chip" data-val="hills">🏔 Hills & Trek</button>
+          <button class="chip" data-val="wildlife">🐯 Wildlife</button>
+          <button class="chip" data-val="spiritual">🛕 Spiritual</button>
+          <button class="chip" data-val="shopping">🛍 Shopping</button>
+          <button class="chip" data-val="photography">📸 Photography</button>
+          <button class="chip" data-val="wellness">🧘 Wellness & Spa</button>
+          <button class="chip" data-val="local-culture">🎭 Local Culture</button>
+        </div>
+      </div>
+
+      <div class="f-footer">
+        <div id="fErr" class="f-err"></div>
+        <button class="btn-gen" onclick="runAgents()" id="genBtn">
+          <i class="fas fa-robot"></i> Generate Real Trip Plan
+          <div class="btn-gen-glow"></div>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- LOADING -->
+  <div class="loading-wrap" id="loadingWrap">
+    <div class="card loading-card">
+      <div class="loading-orbit">
+        <div class="loading-orbit-ring"></div>
+        <div class="loading-orbit-ring"></div>
+        <div class="loading-orbit-ring"></div>
+        <div class="loading-center"><i class="fas fa-robot"></i></div>
+      </div>
+      <div class="loading-title">Agents Collaborating</div>
+      <div class="loading-sub" id="loadingSub">Initialising trip intelligence pipeline...</div>
+      <div class="pipeline" id="pipeline">
+        <div class="pipeline-step" id="ps-research"><div class="ps-icon">🔍</div><div class="ps-name">DESTINATION INTEL</div><div class="ps-status">Waiting...</div></div>
+        <div class="pipeline-step" id="ps-weather"><div class="ps-icon">🌤</div><div class="ps-name">LIVE WEATHER</div><div class="ps-status">Waiting...</div></div>
+        <div class="pipeline-step" id="ps-budget"><div class="ps-icon">💰</div><div class="ps-name">BUDGET AGENT</div><div class="ps-status">Waiting...</div></div>
+        <div class="pipeline-step" id="ps-itinerary"><div class="ps-icon">🗓</div><div class="ps-name">ITINERARY AGENT</div><div class="ps-status">Waiting...</div></div>
+        <div class="pipeline-step" id="ps-recommend"><div class="ps-icon">⭐</div><div class="ps-name">RECOMMEND AGENT</div><div class="ps-status">Waiting...</div></div>
+      </div>
+      <div class="log-stream" id="logStream"></div>
+    </div>
+  </div>
+
+  <!-- RESULTS -->
+  <div id="results" style="display:none">
+
+    <div class="trip-banner" id="tripBanner">
+      <div class="tb-left">
+        <div class="tb-route" id="tbRoute">—</div>
+        <div class="tb-meta" id="tbMeta">—</div>
+      </div>
+      <div class="tb-stats" id="tbStats"></div>
+      <div class="tb-right">
+        <button class="btn-sm" onclick="window.print()"><i class="fas fa-print"></i> Print</button>
+        <button class="btn-sm" onclick="resetAll()"><i class="fas fa-redo"></i> New Trip</button>
+      </div>
+    </div>
+
+    <div id="alertBanner" style="display:none"></div>
+
+    <!-- Destination Highlights -->
+    <div class="dest-highlight" id="destHighlight"></div>
+
+    <div class="res-grid">
+      <!-- LEFT -->
+      <div class="res-left">
+        <!-- MAP -->
+        <div class="card mb">
+          <div class="c-hdr">
+            <div class="c-hdr-l"><span class="dot dot-blue"></span><h2 class="c-title"><i class="fas fa-map-location-dot"></i> Route Intelligence Map</h2></div>
+            <div class="map-legend" id="mapLegend"></div>
+          </div>
+          <div id="tripMap"></div>
+        </div>
+        <!-- ITINERARY -->
+        <div class="card mb">
+          <div class="c-hdr">
+            <div class="c-hdr-l"><span class="dot dot-green"></span><h2 class="c-title"><i class="fas fa-calendar-days"></i> Day-wise Itinerary</h2></div>
+            <div class="day-tabs" id="dayTabs"></div>
+          </div>
+          <div id="itineraryBody"></div>
+        </div>
+        <!-- HOTELS -->
+        <div class="card mb">
+          <div class="c-hdr">
+            <div class="c-hdr-l"><span class="dot dot-cyan"></span><h2 class="c-title"><i class="fas fa-hotel"></i> Where to Stay</h2></div>
+            <div class="agent-log-badge"><i class="fas fa-search"></i> RESEARCH AGENT</div>
+          </div>
+          <div id="hotelsBody"></div>
+        </div>
+        <!-- BUDGET -->
+        <div class="card">
+          <div class="c-hdr">
+            <div class="c-hdr-l"><span class="dot dot-green"></span><h2 class="c-title"><i class="fas fa-chart-pie"></i> Budget Breakdown</h2></div>
+            <div class="agent-log-badge"><i class="fas fa-chart-pie"></i> BUDGET AGENT</div>
+          </div>
+          <div id="budgetBody"></div>
+        </div>
+      </div>
+
+      <!-- RIGHT -->
+      <div class="res-right">
+        <!-- WEATHER -->
+        <div class="card mb">
+          <div class="c-hdr">
+            <div class="c-hdr-l"><span class="dot dot-yellow"></span><h2 class="c-title"><i class="fas fa-cloud-sun"></i> Live Weather</h2></div>
+          </div>
+          <div id="weatherBody"></div>
+        </div>
+        <!-- RECOMMENDATIONS -->
+        <div class="card mb">
+          <div class="c-hdr">
+            <div class="c-hdr-l"><span class="dot dot-purple"></span><h2 class="c-title"><i class="fas fa-star"></i> AI Recommendations</h2></div>
+            <div class="agent-log-badge"><i class="fas fa-star"></i> REC AGENT</div>
+          </div>
+          <div id="recsBody"></div>
+        </div>
+        <!-- SAFETY -->
+        <div class="card mb">
+          <div class="c-hdr">
+            <div class="c-hdr-l"><span class="dot dot-red"></span><h2 class="c-title"><i class="fas fa-shield-halved"></i> Safety Advisory</h2></div>
+          </div>
+          <div id="safetyBody"></div>
+        </div>
+        <!-- PACKING -->
+        <div class="card mb">
+          <div class="c-hdr">
+            <div class="c-hdr-l"><span class="dot dot-orange"></span><h2 class="c-title"><i class="fas fa-suitcase-rolling"></i> Packing List</h2></div>
+            <span class="pack-prog" id="packProg">0 / 0</span>
+          </div>
+          <div id="packingBody"></div>
+        </div>
+        <!-- EMERGENCY -->
+        <div class="card">
+          <div class="c-hdr">
+            <div class="c-hdr-l"><span class="dot dot-red"></span><h2 class="c-title"><i class="fas fa-phone-volume"></i> Emergency Contacts</h2></div>
+          </div>
+          <div id="emergencyBody"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- .main -->
+
+<div class="toast-stack" id="toastStack"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="../js/trip.js"></script>
+</body>
+</html>
